@@ -4,10 +4,10 @@ export const assetHandler = defineFunction({
   name: 'asset-handler',
   entry: './handler.ts',
   environment: {
-    DB_HOST: process.env.DB_HOST || '',
-    DB_NAME: process.env.DB_NAME || 'assetdb',
-    DB_USER: process.env.DB_USER || '',
-    DB_PASSWORD: process.env.DB_PASSWORD || '',
+    DB_HOST: 'amna-asset-management-db.c2xw4omkuu11.us-east-1.rds.amazonaws.com',
+    DB_NAME: 'assetdb',
+    DB_USER: 'admin',
+    DB_PASSWORD: 'test1234',
   },
   timeoutSeconds: 30,
 });

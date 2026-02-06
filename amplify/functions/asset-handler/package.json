@@ -1,5 +1,9 @@
 {
   "name": "asset-handler",
   "version": "1.0.0",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "sequelize": "^6.37.3",
+    "mysql2": "^3.11.0"
+  }
 }
