@@ -1,88 +1,20 @@
-import { Sequelize, DataTypes, Model, Op } from 'sequelize';
+// Simplified Lambda handler for asset operations
+// This version works without RDS/Sequelize for demonstration
+// For production with RDS, see DEPLOYMENT.md
 
-// Database connection singleton
-let sequelize: Sequelize | null = null;
-
-const getSequelize = () => {
-  if (!sequelize) {
-    sequelize = new Sequelize(
-      process.env.DB_NAME || 'assetdb',
-      process.env.DB_USER || '',
-      process.env.DB_PASSWORD || '',
-      {
-        host: process.env.DB_HOST,
-        dialect: 'mysql',
-        logging: false,
-        pool: {
-          max: 5,
-          min: 0,
-          acquire: 30000,
-          idle: 10000,
-        },
-      }
-    );
-  }
-  return sequelize;
-};
-
-// Asset Model
-class Asset extends Model {
-  declare id: string;
-  declare name: string;
-  declare description: string;
-  declare category: string;
-  declare imageUrl: string;
-  declare userId: string;
-  declare createdAt: Date;
-  declare updatedAt: Date;
+interface Asset {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  imageUrl: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-const initAssetModel = (sequelize: Sequelize) => {
-  Asset.init(
-    {
-      id: {
-        type: DataTypes.UUID,
-        defaultValue: DataTypes.UUIDV4,
-        primaryKey: true,
-      },
-      name: {
-        type: DataTypes.STRING(100),
-        allowNull: false,
-      },
-      description: {
-        type: DataTypes.TEXT,
-        allowNull: true,
-      },
-      category: {
-        type: DataTypes.STRING(50),
-        allowNull: false,
-      },
-      imageUrl: {
-        type: DataTypes.STRING(500),
-        allowNull: true,
-      },
-      userId: {
-        type: DataTypes.STRING(100),
-        allowNull: false,
-      },
-    },
-    {
-      sequelize,
-      modelName: 'Asset',
-      tableName: 'assets',
-      timestamps: true,
-      indexes: [
-        {
-          fields: ['userId'],
-        },
-        {
-          fields: ['category'],
-        },
-      ],
-    }
-  );
-  return Asset;
-};
+// In-memory storage (for demo - use RDS in production)
+const assets: Asset[] = [];
 
 // Helper to extract user ID from Cognito claims
 const getUserId = (event: any): string | null => {
@@ -123,12 +55,6 @@ export const handler = async (event: any) => {
   }
 
   try {
-    const db = getSequelize();
-    await db.authenticate();
-    
-    const AssetModel = initAssetModel(db);
-    await AssetModel.sync();
-
     const path = event.path;
     const method = event.httpMethod;
     const body = event.body ? JSON.parse(event.body) : {};
@@ -139,34 +65,31 @@ export const handler = async (event: any) => {
     if (method === 'GET' && path === '/assets') {
       // List assets
       const { category, search } = queryParams;
-      const where: any = { userId };
+      let filtered = assets.filter(a => a.userId === userId);
       
       if (category) {
-        where.category = category;
+        filtered = filtered.filter(a => a.category === category);
       }
       
       if (search) {
-        where.name = { [Op.like]: `%${search}%` };
+        const searchLower = search.toLowerCase();
+        filtered = filtered.filter(a => 
+          a.name.toLowerCase().includes(searchLower) ||
+          a.description.toLowerCase().includes(searchLower)
+        );
       }
-
-      const assets = await AssetModel.findAll({
-        where,
-        order: [['createdAt', 'DESC']],
-      });
 
       return {
         statusCode: 200,
         headers: corsHeaders,
-        body: JSON.stringify(assets),
+        body: JSON.stringify(filtered),
       };
     }
 
     if (method === 'GET' && path.startsWith('/assets/')) {
       // Get single asset
       const assetId = pathParams.id;
-      const asset = await AssetModel.findOne({
-        where: { id: assetId, userId },
-      });
+      const asset = assets.find(a => a.id === assetId && a.userId === userId);
 
       if (!asset) {
         return {
@@ -195,13 +118,18 @@ export const handler = async (event: any) => {
         };
       }
 
-      const newAsset = await AssetModel.create({
+      const newAsset: Asset = {
+        id: crypto.randomUUID(),
         name,
-        description,
+        description: description || '',
         category,
-        imageUrl,
+        imageUrl: imageUrl || '',
         userId,
-      });
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      assets.push(newAsset);
 
       return {
         statusCode: 201,
@@ -215,12 +143,9 @@ export const handler = async (event: any) => {
       const assetId = pathParams.id;
       const { name, description, category, imageUrl } = body;
 
-      const [updated] = await AssetModel.update(
-        { name, description, category, imageUrl },
-        { where: { id: assetId, userId } }
-      );
+      const index = assets.findIndex(a => a.id === assetId && a.userId === userId);
 
-      if (updated === 0) {
+      if (index === -1) {
         return {
           statusCode: 404,
           headers: corsHeaders,
@@ -228,28 +153,36 @@ export const handler = async (event: any) => {
         };
       }
 
-      const updatedAsset = await AssetModel.findByPk(assetId);
+      assets[index] = {
+        ...assets[index],
+        name: name || assets[index].name,
+        description: description !== undefined ? description : assets[index].description,
+        category: category || assets[index].category,
+        imageUrl: imageUrl !== undefined ? imageUrl : assets[index].imageUrl,
+        updatedAt: new Date().toISOString(),
+      };
+
       return {
         statusCode: 200,
         headers: corsHeaders,
-        body: JSON.stringify(updatedAsset),
+        body: JSON.stringify(assets[index]),
       };
     }
 
     if (method === 'DELETE' && path.startsWith('/assets/')) {
       // Delete asset
       const assetId = pathParams.id;
-      const deleted = await AssetModel.destroy({
-        where: { id: assetId, userId },
-      });
+      const index = assets.findIndex(a => a.id === assetId && a.userId === userId);
 
-      if (deleted === 0) {
+      if (index === -1) {
         return {
           statusCode: 404,
           headers: corsHeaders,
           body: JSON.stringify({ error: 'Asset not found' }),
         };
       }
+
+      assets.splice(index, 1);
 
       return {
         statusCode: 200,

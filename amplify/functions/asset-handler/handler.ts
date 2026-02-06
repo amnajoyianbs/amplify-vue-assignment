@@ -1,74 +1,20 @@
-import { Sequelize, DataTypes, Model, Op } from 'sequelize';
+// Simplified Lambda handler for asset operations
+// This version works without RDS/Sequelize for demonstration
+// For production with RDS, see DEPLOYMENT.md
 
-// Database connection
-let sequelize: Sequelize | null = null;
-
-const getSequelize = () => {
-  if (!sequelize) {
-    sequelize = new Sequelize(
-      process.env.DB_NAME || 'assetdb',
-      process.env.DB_USER || '',
-      process.env.DB_PASSWORD || '',
-      {
-        host: process.env.DB_HOST,
-        dialect: 'mysql',
-        logging: false,
-      }
-    );
-  }
-  return sequelize;
-};
-
-// Asset Model
-class Asset extends Model {
-  declare id: string;
-  declare name: string;
-  declare description: string;
-  declare category: string;
-  declare imageUrl: string;
-  declare userId: string;
-  declare createdAt: Date;
-  declare updatedAt: Date;
+interface Asset {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  imageUrl: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-const initAssetModel = (sequelize: Sequelize) => {
-  Asset.init(
-    {
-      id: {
-        type: DataTypes.UUID,
-        defaultValue: DataTypes.UUIDV4,
-        primaryKey: true,
-      },
-      name: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-      description: {
-        type: DataTypes.TEXT,
-        allowNull: true,
-      },
-      category: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-      imageUrl: {
-        type: DataTypes.STRING,
-        allowNull: true,
-      },
-      userId: {
-        type: DataTypes.STRING,
-        allowNull: false,
-      },
-    },
-    {
-      sequelize,
-      modelName: 'Asset',
-      tableName: 'assets',
-      timestamps: true,
-    }
-  );
-  return Asset;
-};
+// In-memory storage (for demo - use RDS in production)
+const assets: Asset[] = [];
 
 export const handler = async (event: any) => {
   console.log('Event:', JSON.stringify(event, null, 2));
@@ -76,37 +22,30 @@ export const handler = async (event: any) => {
   const { action, data, assetId, userId } = event;
 
   try {
-    const db = getSequelize();
-    await db.authenticate();
-    
-    const AssetModel = initAssetModel(db);
-    await AssetModel.sync();
-
     switch (action) {
       case 'create':
-        const newAsset = await AssetModel.create({
+        const newAsset: Asset = {
+          id: crypto.randomUUID(),
           ...data,
           userId,
-        });
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        assets.push(newAsset);
         return {
           statusCode: 200,
           body: JSON.stringify(newAsset),
         };
 
       case 'list':
-        const assets = await AssetModel.findAll({
-          where: { userId },
-          order: [['createdAt', 'DESC']],
-        });
+        const userAssets = assets.filter(a => a.userId === userId);
         return {
           statusCode: 200,
-          body: JSON.stringify(assets),
+          body: JSON.stringify(userAssets),
         };
 
       case 'get':
-        const asset = await AssetModel.findOne({
-          where: { id: assetId, userId },
-        });
+        const asset = assets.find(a => a.id === assetId && a.userId === userId);
         if (!asset) {
           return {
             statusCode: 404,
@@ -119,31 +58,32 @@ export const handler = async (event: any) => {
         };
 
       case 'update':
-        const [updated] = await AssetModel.update(data, {
-          where: { id: assetId, userId },
-        });
-        if (updated === 0) {
+        const index = assets.findIndex(a => a.id === assetId && a.userId === userId);
+        if (index === -1) {
           return {
             statusCode: 404,
             body: JSON.stringify({ error: 'Asset not found' }),
           };
         }
-        const updatedAsset = await AssetModel.findByPk(assetId);
+        assets[index] = {
+          ...assets[index],
+          ...data,
+          updatedAt: new Date().toISOString(),
+        };
         return {
           statusCode: 200,
-          body: JSON.stringify(updatedAsset),
+          body: JSON.stringify(assets[index]),
         };
 
       case 'delete':
-        const deleted = await AssetModel.destroy({
-          where: { id: assetId, userId },
-        });
-        if (deleted === 0) {
+        const deleteIndex = assets.findIndex(a => a.id === assetId && a.userId === userId);
+        if (deleteIndex === -1) {
           return {
             statusCode: 404,
             body: JSON.stringify({ error: 'Asset not found' }),
           };
         }
+        assets.splice(deleteIndex, 1);
         return {
           statusCode: 200,
           body: JSON.stringify({ message: 'Asset deleted successfully' }),
