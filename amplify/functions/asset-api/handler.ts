@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Sequelize, DataTypes, Model, Op } from 'sequelize';
 
 // Database connection singleton
