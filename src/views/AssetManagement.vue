@@ -134,6 +134,7 @@ onMounted(async () => {
 // Event Handlers
 const handleSubmitAsset = async (data: any) => {
   try {
+    // Step 1: Create asset in DynamoDB (without image URL first)
     const assetData = {
       name: data.name,
       description: data.description,
@@ -144,13 +145,16 @@ const handleSubmitAsset = async (data: any) => {
 
     const newAsset = await assetStore.createAsset(assetData);
 
-    // Upload image if provided
+    // Step 2: Upload image if provided and update asset with S3 URL
     if (data.image && newAsset) {
       const imageUrl = await assetStore.uploadAssetImage(data.image, newAsset.id);
+      
+      // Update the asset in DynamoDB with the S3 URL
+      await assetStore.updateAsset(newAsset.id, { imageUrl });
       newAsset.imageUrl = imageUrl;
     }
 
-    // Create asset info in DynamoDB
+    // Step 3: Create asset info in DynamoDB
     if (newAsset) {
       await assetStore.createAssetInfo({
         assetId: newAsset.id,
@@ -159,7 +163,7 @@ const handleSubmitAsset = async (data: any) => {
         userId: authStore.userId!,
       });
 
-      // Log the action
+      // Step 4: Log the action
       await assetStore.createAssetLog({
         assetId: newAsset.id,
         action: 'created',

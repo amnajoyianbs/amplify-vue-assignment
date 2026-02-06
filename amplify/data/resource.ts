@@ -5,10 +5,24 @@ import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
  * DynamoDB stores: tags, status, logs, and references to RDS asset metadata
  */
 const schema = a.schema({
+  // Complete Asset stored in DynamoDB
+  Asset: a
+    .model({
+      name: a.string().required(),
+      description: a.string(),
+      category: a.string().required(),
+      imageUrl: a.string(),
+      userId: a.string().required(),
+    })
+    .authorization((allow) => [
+      allow.owner(),
+      allow.authenticated().to(['read'])
+    ]),
+
   // Asset additional info stored in DynamoDB
   AssetInfo: a
     .model({
-      assetId: a.string().required(), // Reference to RDS asset
+      assetId: a.string().required(), // Reference to Asset
       tags: a.string().array(), // Array of tags
       status: a.enum(['active', 'inactive', 'archived']),
       notes: a.string(),
