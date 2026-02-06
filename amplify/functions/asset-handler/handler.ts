@@ -7,8 +7,8 @@ const getSequelize = () => {
   if (!sequelize) {
     sequelize = new Sequelize(
       process.env.DB_NAME || 'assetdb',
-      process.env.DB_USER || '',
-      process.env.DB_PASSWORD || '',
+      process.env.DB_USER || 'admin',
+      process.env.DB_PASSWORD || 'test1234',
       {
         host: process.env.DB_HOST,
         dialect: 'mysql',
