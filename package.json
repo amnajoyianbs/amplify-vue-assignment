@@ -12,7 +12,11 @@
   },
   "dependencies": {
     "@aws-amplify/ui-vue": "^4.3.8",
+    "@headlessui/vue": "^1.7.23",
+    "@heroicons/vue": "^2.2.0",
     "aws-amplify": "^6.6.6",
+    "element-plus": "^2.13.2",
+    "pinia": "^3.0.4",
     "vue": "^3.4.21"
   },
   "devDependencies": {

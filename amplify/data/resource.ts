@@ -1,17 +1,37 @@
 import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
 
-/*== STEP 1 ===============================================================
-The section below creates a Todo database table with a "content" field. Try
-adding a new "isDone" field as a boolean. The authorization rule below
-specifies that any user authenticated via an API key can "create", "read",
-"update", and "delete" any "Todo" records.
-=========================================================================*/
+/**
+ * Asset Management Schema
+ * DynamoDB stores: tags, status, logs, and references to RDS asset metadata
+ */
 const schema = a.schema({
-  Todo: a
+  // Asset additional info stored in DynamoDB
+  AssetInfo: a
     .model({
-      content: a.string(),
+      assetId: a.string().required(), // Reference to RDS asset
+      tags: a.string().array(), // Array of tags
+      status: a.enum(['active', 'inactive', 'archived']),
+      notes: a.string(),
+      userId: a.string().required(), // Owner of the asset
     })
-    .authorization((allow) => [allow.publicApiKey()]),
+    .authorization((allow) => [
+      allow.owner(),
+      allow.authenticated().to(['read'])
+    ]),
+
+  // Asset activity logs stored in DynamoDB
+  AssetLog: a
+    .model({
+      assetId: a.string().required(),
+      action: a.enum(['created', 'updated', 'deleted', 'viewed']),
+      timestamp: a.datetime(),
+      userId: a.string().required(),
+      details: a.string(),
+    })
+    .authorization((allow) => [
+      allow.owner(),
+      allow.authenticated().to(['read'])
+    ]),
 });
 
 export type Schema = ClientSchema<typeof schema>;
@@ -19,11 +39,7 @@ export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,
   authorizationModes: {
-    defaultAuthorizationMode: "apiKey",
-    // API Key is used for a.allow.public() rules
-    apiKeyAuthorizationMode: {
-      expiresInDays: 30,
-    },
+    defaultAuthorizationMode: "userPool",
   },
 });
 

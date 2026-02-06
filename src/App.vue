@@ -1,17 +1,34 @@
 <script setup lang="ts">
-import Todos from './components/Todos.vue'
-import { Authenticator } from "@aws-amplify/ui-vue";
-import "@aws-amplify/ui-vue/styles.css";
+import { onMounted } from 'vue';
+import { Authenticator } from '@aws-amplify/ui-vue';
+import '@aws-amplify/ui-vue/styles.css';
+import AssetManagement from './views/AssetManagement.vue';
+import { useAuthStore } from './stores/authStore';
+
+const authStore = useAuthStore();
+
+onMounted(async () => {
+  await authStore.checkAuth();
+});
 </script>
 
 <template>
-  <main>    
-    <authenticator>
-      <template v-slot="{ signOut }">
-        <Todos />
-        <button @click="signOut">Sign Out</button>
-      </template>
-    </authenticator>
-  </main>
+  <Authenticator>
+    <template v-slot="{ signOut, user }">
+      <AssetManagement />
+    </template>
+  </Authenticator>
 </template>
+
+<style>
+/* Global styles */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+</style>
 

@@ -1,7 +1,20 @@
 {
   "extends": "@vue/tsconfig/tsconfig.dom.json",
-  "include": ["env.d.ts", "src/**/*", "src/**/*.vue", "amplify/**/*"],
-  "exclude": ["src/**/__tests__/*"],
+  "include": [
+    "env.d.ts",
+    "src/**/*",
+    "src/**/*.vue",
+    "amplify/data/resource.ts",
+    "amplify/auth/resource.ts",
+    "amplify/storage/resource.ts",
+    "amplify/backend.ts",
+    "amplify/functions/*/resource.ts"
+  ],
+  "exclude": [
+    "src/**/__tests__/*",
+    "amplify/functions/*/handler.ts",
+    "amplify/functions/*/package.json"
+  ],
   "compilerOptions": {
     "composite": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
