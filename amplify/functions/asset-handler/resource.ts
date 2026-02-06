@@ -10,4 +10,7 @@ export const assetHandler = defineFunction({
     DB_PASSWORD: 'test1234',
   },
   timeoutSeconds: 30,
+  bundling: {
+    externalModules: ['sequelize', 'mysql2'],
+  },
 });

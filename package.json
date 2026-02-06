@@ -17,6 +17,7 @@
     "aws-amplify": "^6.6.6",
     "element-plus": "^2.13.2",
     "pinia": "^3.0.4",
+    "sequelize": "^6.37.7",
     "vue": "^3.4.21"
   },
   "devDependencies": {
