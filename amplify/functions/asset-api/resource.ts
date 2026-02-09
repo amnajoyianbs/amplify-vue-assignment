@@ -12,4 +12,7 @@ export const assetApi = defineFunction({
     USER_POOL_CLIENT_ID: '7e3fks6jjanolr1nvhbrr4eap4',
   },
   timeoutSeconds: 30,
+  bundling: {
+    externalModules: ['aws-jwt-verify', 'pg'],
+  },
 });
