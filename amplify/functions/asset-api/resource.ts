@@ -8,6 +8,8 @@ export const assetApi = defineFunction({
     DB_NAME: 'assetdb',
     DB_USER: 'admin',
     DB_PASSWORD: 'test1234',
+    USER_POOL_ID: 'us-east-1_URfsY6AKr',
+    USER_POOL_CLIENT_ID: '7e3fks6jjanolr1nvhbrr4eap4',
   },
   timeoutSeconds: 30,
 });

@@ -1,54 +1,65 @@
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '../../amplify/data/resource';
 import type { Asset } from '../stores/assetStore';
+import { fetchAuthSession } from 'aws-amplify/auth';
 
-const client = generateClient<Schema>();
+// Get the Lambda function URL from outputs
+const getApiUrl = async () => {
+  try {
+    const outputs: any = await import('../../amplify_outputs.json');
+    return outputs.default?.custom?.assetApiUrl || outputs.custom?.assetApiUrl || '';
+  } catch {
+    return '';
+  }
+};
 
-// Hybrid service: DynamoDB for now, ready for RDS Lambda integration
+// Helper to make authenticated requests to Lambda
+async function callLambdaApi(path: string, options: RequestInit = {}) {
+  const apiUrl = await getApiUrl();
+  
+  if (!apiUrl) {
+    throw new Error('Asset API URL not configured. Please deploy the backend first.');
+  }
+
+  const session = await fetchAuthSession();
+  const token = session.tokens?.idToken?.toString();
+
+  if (!token) {
+    throw new Error('No authentication token available. Please sign in.');
+  }
+
+  const response = await fetch(`${apiUrl}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      ...options.headers,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error || `API Error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// Asset service - all operations go through API Gateway/Lambda/RDS
 export const assetService = {
-  // List all assets from DynamoDB
+  // List all assets from RDS via Lambda
   async listAssets(filters?: { category?: string; search?: string }): Promise<Asset[]> {
-    try {
-      // For now, using in-memory until Lambda is properly configured
-      // In production, this would invoke Lambda function
-      const stored = localStorage.getItem('assets');
-      let assets: Asset[] = stored ? JSON.parse(stored) : [];
-      
-      if (filters?.category) {
-        assets = assets.filter(a => a.category === filters.category);
-      }
-      
-      if (filters?.search) {
-        const search = filters.search.toLowerCase();
-        assets = assets.filter(a => 
-          a.name.toLowerCase().includes(search) ||
-          a.description.toLowerCase().includes(search)
-        );
-      }
-      
-      return assets;
-    } catch (error) {
-      console.error('Error listing assets:', error);
-      return [];
-    }
+    const queryParams = new URLSearchParams();
+    if (filters?.category) queryParams.append('category', filters.category);
+    if (filters?.search) queryParams.append('search', filters.search);
+    
+    const query = queryParams.toString();
+    const path = query ? `/assets?${query}` : '/assets';
+    
+    return await callLambdaApi(path, { method: 'GET' });
   },
 
   // Get single asset
   async getAsset(id: string): Promise<Asset> {
-    try {
-      const stored = localStorage.getItem('assets');
-      const assets: Asset[] = stored ? JSON.parse(stored) : [];
-      const asset = assets.find(a => a.id === id);
-      
-      if (!asset) {
-        throw new Error('Asset not found');
-      }
-      
-      return asset;
-    } catch (error) {
-      console.error('Error getting asset:', error);
-      throw new Error('Asset not found');
-    }
+    return await callLambdaApi(`/assets/${id}`, { method: 'GET' });
   },
 
   // Create asset
@@ -59,71 +70,22 @@ export const assetService = {
     imageUrl?: string;
     userId: string;
   }): Promise<Asset> {
-    try {
-      const newAsset: Asset = {
-        id: crypto.randomUUID(),
-        name: data.name,
-        description: data.description,
-        category: data.category,
-        imageUrl: data.imageUrl || '',
-        userId: data.userId,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      
-      // Store in localStorage
-      const stored = localStorage.getItem('assets');
-      const assets: Asset[] = stored ? JSON.parse(stored) : [];
-      assets.unshift(newAsset);
-      localStorage.setItem('assets', JSON.stringify(assets));
-      
-      return newAsset;
-    } catch (error) {
-      console.error('Error creating asset:', error);
-      throw error;
-    }
+    return await callLambdaApi('/assets', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 
   // Update asset
   async updateAsset(id: string, data: Partial<Asset>): Promise<Asset> {
-    try {
-      const stored = localStorage.getItem('assets');
-      const assets: Asset[] = stored ? JSON.parse(stored) : [];
-      const index = assets.findIndex(a => a.id === id);
-      
-      if (index === -1) {
-        throw new Error('Asset not found');
-      }
-      
-      assets[index] = {
-        ...assets[index],
-        ...data,
-        updatedAt: new Date().toISOString(),
-      };
-      
-      localStorage.setItem('assets', JSON.stringify(assets));
-      return assets[index];
-    } catch (error) {
-      console.error('Error updating asset:', error);
-      throw new Error('Asset not found');
-    }
+    return await callLambdaApi(`/assets/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   },
 
   // Delete asset
   async deleteAsset(id: string): Promise<void> {
-    try {
-      const stored = localStorage.getItem('assets');
-      const assets: Asset[] = stored ? JSON.parse(stored) : [];
-      const filtered = assets.filter(a => a.id !== id);
-      
-      if (filtered.length === assets.length) {
-        throw new Error('Asset not found');
-      }
-      
-      localStorage.setItem('assets', JSON.stringify(filtered));
-    } catch (error) {
-      console.error('Error deleting asset:', error);
-      throw new Error('Asset not found');
-    }
+    await callLambdaApi(`/assets/${id}`, { method: 'DELETE' });
   },
 };

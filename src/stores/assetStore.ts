@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
-import { uploadData, getUrl, remove } from 'aws-amplify/storage';
+import { uploadData, getUrl } from 'aws-amplify/storage';
 import { assetService } from '../services/assetService';
 
 const client = generateClient<Schema>();
@@ -12,7 +12,7 @@ export interface Asset {
   name: string;
   description: string;
   category: string;
-  imageUrl: string;
+  imageUrl: string; // S3 key/path, not presigned URL
   userId: string;
   createdAt: string;
   updatedAt: string;
@@ -30,29 +30,59 @@ export interface AssetInfo {
 export const useAssetStore = defineStore('asset', () => {
   // State
   const assets = ref<Asset[]>([]);
+  const assetInfoMap = ref<Map<string, AssetInfo>>(new Map());
   const currentAsset = ref<Asset | null>(null);
   const loading = ref(false);
   const error = ref<string | null>(null);
 
   // Computed
   const assetCount = computed(() => assets.value.length);
-  const activeAssets = computed(() => 
-    assets.value.filter(a => a.category !== 'archived')
-  );
+  const activeAssets = computed(() => {
+    return assets.value.filter(asset => {
+      const info = assetInfoMap.value.get(asset.id);
+      return !info || info.status === 'active';
+    });
+  });
+  const inactiveAssets = computed(() => {
+    return assets.value.filter(asset => {
+      const info = assetInfoMap.value.get(asset.id);
+      return info && info.status === 'inactive';
+    });
+  });
 
   // Actions
-  const fetchAssets = async (userId: string, filters?: { category?: string; search?: string }) => {
+  const fetchAssets = async (filters?: { category?: string; search?: string }) => {
     loading.value = true;
     error.value = null;
     try {
       // Call REST API via Lambda
       const data = await assetService.listAssets(filters);
       assets.value = data;
+      
+      // Fetch asset info for all assets to get status
+      await fetchAllAssetInfo();
     } catch (e: any) {
       error.value = e.message;
       console.error('Error fetching assets:', e);
     } finally {
       loading.value = false;
+    }
+  };
+
+  const fetchAllAssetInfo = async () => {
+    try {
+      // Fetch all asset info from DynamoDB
+      const result = await client.models.AssetInfo.list();
+      
+      // Create a map of assetId -> AssetInfo
+      assetInfoMap.value.clear();
+      result.data.forEach((info: any) => {
+        if (info.assetId) {
+          assetInfoMap.value.set(info.assetId, info);
+        }
+      });
+    } catch (e: any) {
+      console.error('Error fetching asset info:', e);
     }
   };
 
@@ -75,7 +105,7 @@ export const useAssetStore = defineStore('asset', () => {
     loading.value = true;
     error.value = null;
     try {
-      // Call service to create asset (in-memory for now, RDS integration ready)
+      // Call service to create asset via API Gateway/Lambda/RDS
       const newAsset = await assetService.createAsset({
         name: assetData.name,
         description: assetData.description,
@@ -84,7 +114,8 @@ export const useAssetStore = defineStore('asset', () => {
         userId: assetData.userId,
       });
       
-      assets.value.unshift(newAsset);
+      // Add to end of array to match ASC order (oldest first)
+      assets.value.push(newAsset);
       return newAsset;
     } catch (e: any) {
       error.value = e.message;
@@ -115,16 +146,29 @@ export const useAssetStore = defineStore('asset', () => {
   const uploadAssetImage = async (file: File, assetId: string) => {
     try {
       const key = `assets/${assetId}/${file.name}`;
-      const result = await uploadData({
+      await uploadData({
         path: key,
         data: file,
       }).result;
       
-      const urlResult = await getUrl({ path: key });
-      return urlResult.url.toString();
+      // Return the S3 key/path instead of presigned URL
+      // The key will be stored in DB and presigned URLs generated on-demand
+      return key;
     } catch (e: any) {
       error.value = e.message;
       throw e;
+    }
+  };
+
+  // Generate presigned URL from S3 key
+  const getImageUrl = async (s3Key: string) => {
+    try {
+      if (!s3Key) return '';
+      const urlResult = await getUrl({ path: s3Key });
+      return urlResult.url.toString();
+    } catch (e: any) {
+      console.error('Error generating image URL:', e);
+      return '';
     }
   };
 
@@ -219,12 +263,15 @@ export const useAssetStore = defineStore('asset', () => {
     // Computed
     assetCount,
     activeAssets,
+    inactiveAssets,
     // Actions
     fetchAssets,
+    fetchAllAssetInfo,
     getAsset,
     createAsset,
     updateAsset,
     uploadAssetImage,
+    getImageUrl,
     deleteAsset,
     createAssetInfo,
     getAssetInfo,

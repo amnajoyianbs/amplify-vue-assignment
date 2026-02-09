@@ -7,8 +7,12 @@
 
     <!-- Empty state with v-else-if -->
     <div v-else-if="!assets || assets.length === 0" class="empty-state">
-      <el-empty description="No assets found">
-        <el-button type="primary" @click="$emit('create')">
+      <el-empty description="No assets found" :image-size="120">
+        <template #description>
+          <p class="empty-description">Get started by creating your first asset</p>
+        </template>
+        <el-button type="primary" size="large" @click="$emit('create')">
+          <el-icon><Plus /></el-icon>
           Create First Asset
         </el-button>
       </el-empty>
@@ -33,11 +37,8 @@
 
         <div class="asset-content">
           <!-- Conditional image rendering -->
-          <div v-if="asset.imageUrl" class="asset-image">
-            <img :src="asset.imageUrl" :alt="asset.name" />
-          </div>
-          <div v-else class="asset-image-placeholder">
-            <el-icon :size="48"><Picture /></el-icon>
+          <div class="asset-image">
+            <AssetImage :s3Key="asset.imageUrl" :alt="asset.name" />
           </div>
 
           <p class="asset-description">
@@ -50,15 +51,19 @@
             <el-button
               type="primary"
               size="small"
+              plain
               @click.stop="handleView(asset)"
             >
-              View
+              <el-icon><View /></el-icon>
+              View Details
             </el-button>
             <el-button
               type="danger"
               size="small"
+              plain
               @click.stop="handleDelete(asset)"
             >
+              <el-icon><Delete /></el-icon>
               Delete
             </el-button>
           </div>
@@ -70,8 +75,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Picture } from '@element-plus/icons-vue';
+import { Picture, View, Delete, Plus } from '@element-plus/icons-vue';
 import Card from '../layout/Card.vue';
+import AssetImage from './AssetImage.vue';
 import type { Asset } from '../../stores/assetStore';
 
 // Props
@@ -130,14 +136,48 @@ const truncateText = (text: string, maxLength: number) => {
 }
 
 .empty-state {
-  padding: 3rem;
+  padding: 4rem 2rem;
   text-align: center;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.empty-description {
+  color: #666;
+  font-size: 0.95rem;
+  margin-top: 0.5rem;
 }
 
 .asset-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1.5rem;
+  width: 100%;
+}
+
+@media (min-width: 1400px) {
+  .asset-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1399px) {
+  .asset-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .asset-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .asset-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .asset-header {
@@ -148,8 +188,9 @@ const truncateText = (text: string, maxLength: number) => {
 
 .asset-header h4 {
   margin: 0;
-  font-size: 1rem;
-  color: #303133;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1a1a1a;
 }
 
 .asset-content {
@@ -158,40 +199,29 @@ const truncateText = (text: string, maxLength: number) => {
 
 .asset-image {
   width: 100%;
-  height: 150px;
+  height: 180px;
   margin-bottom: 1rem;
-  border-radius: 4px;
+  border-radius: 8px;
   overflow: hidden;
-}
-
-.asset-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.asset-image-placeholder {
-  width: 100%;
-  height: 150px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f5f7fa;
-  border-radius: 4px;
-  margin-bottom: 1rem;
-  color: #909399;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
 .asset-description {
-  color: #606266;
+  color: #666;
   font-size: 0.9rem;
-  line-height: 1.5;
+  line-height: 1.6;
   margin: 0;
+  min-height: 60px;
 }
 
 .asset-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.75rem;
   justify-content: flex-end;
+}
+
+.asset-actions .el-button {
+  flex: 1;
+  max-width: 140px;
 }
 </style>

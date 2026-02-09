@@ -1,5 +1,13 @@
 // @ts-nocheck
 import { Sequelize, DataTypes, Model, Op } from 'sequelize';
+import { CognitoJwtVerifier } from 'aws-jwt-verify';
+
+// Initialize JWT verifier for Cognito
+const verifier = CognitoJwtVerifier.create({
+  userPoolId: process.env.USER_POOL_ID || '',
+  tokenUse: 'id',
+  clientId: process.env.USER_POOL_CLIENT_ID || '',
+});
 
 // Database connection singleton
 let sequelize: Sequelize | null = null;
@@ -85,12 +93,31 @@ const initAssetModel = (sequelize: Sequelize) => {
   return Asset;
 };
 
-// Helper to extract user ID from Cognito claims
-const getUserId = (event: any): string | null => {
+// Helper to extract user ID from API Gateway authorizer context or JWT
+const getUserId = async (event: any): Promise<string | null> => {
   try {
+    // First, try to get user ID from API Gateway Cognito authorizer context
     const claims = event.requestContext?.authorizer?.claims;
-    return claims?.sub || claims?.['cognito:username'] || null;
-  } catch {
+    if (claims) {
+      return claims.sub || claims['cognito:username'] || null;
+    }
+    
+    // Fallback: Verify JWT manually (for Function URL or testing)
+    const authHeader = event.headers?.Authorization || event.headers?.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('No Bearer token found in Authorization header');
+      return null;
+    }
+    
+    const token = authHeader.replace('Bearer ', '');
+    
+    // Verify the JWT token with Cognito
+    const payload = await verifier.verify(token);
+    
+    // Extract user ID from verified token
+    return payload.sub || payload['cognito:username'] || null;
+  } catch (error) {
+    console.error('User ID extraction failed:', error);
     return null;
   }
 };
@@ -106,7 +133,8 @@ export const handler = async (event: any) => {
   console.log('Event:', JSON.stringify(event, null, 2));
 
   // Handle OPTIONS for CORS
-  if (event.httpMethod === 'OPTIONS') {
+  const method = event.requestContext?.http?.method || event.httpMethod;
+  if (method === 'OPTIONS') {
     return {
       statusCode: 200,
       headers: corsHeaders,
@@ -114,12 +142,12 @@ export const handler = async (event: any) => {
     };
   }
 
-  const userId = getUserId(event);
+  const userId = await getUserId(event);
   if (!userId) {
     return {
       statusCode: 401,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'Unauthorized' }),
+      body: JSON.stringify({ error: 'Unauthorized - Invalid or missing authentication' }),
     };
   }
 
@@ -130,11 +158,15 @@ export const handler = async (event: any) => {
     const AssetModel = initAssetModel(db);
     await AssetModel.sync();
 
-    const path = event.path;
-    const method = event.httpMethod;
+    // Support both Function URL and API Gateway event formats
+    const path = event.requestContext?.http?.path || event.path || event.rawPath || '';
     const body = event.body ? JSON.parse(event.body) : {};
     const pathParams = event.pathParameters || {};
     const queryParams = event.queryStringParameters || {};
+
+    // Extract asset ID from path if present
+    const assetIdMatch = path.match(/\/assets\/([^/]+)/);
+    const assetId = assetIdMatch ? assetIdMatch[1] : pathParams.id;
 
     // Route handling
     if (method === 'GET' && path === '/assets') {
@@ -152,7 +184,7 @@ export const handler = async (event: any) => {
 
       const assets = await AssetModel.findAll({
         where,
-        order: [['createdAt', 'DESC']],
+        order: [['createdAt', 'ASC']],
       });
 
       return {
@@ -162,9 +194,8 @@ export const handler = async (event: any) => {
       };
     }
 
-    if (method === 'GET' && path.startsWith('/assets/')) {
+    if (method === 'GET' && path.startsWith('/assets/') && assetId) {
       // Get single asset
-      const assetId = pathParams.id;
       const asset = await AssetModel.findOne({
         where: { id: assetId, userId },
       });
@@ -211,9 +242,8 @@ export const handler = async (event: any) => {
       };
     }
 
-    if (method === 'PUT' && path.startsWith('/assets/')) {
+    if (method === 'PUT' && path.startsWith('/assets/') && assetId) {
       // Update asset
-      const assetId = pathParams.id;
       const { name, description, category, imageUrl } = body;
 
       const [updated] = await AssetModel.update(
@@ -237,9 +267,8 @@ export const handler = async (event: any) => {
       };
     }
 
-    if (method === 'DELETE' && path.startsWith('/assets/')) {
+    if (method === 'DELETE' && path.startsWith('/assets/') && assetId) {
       // Delete asset
-      const assetId = pathParams.id;
       const deleted = await AssetModel.destroy({
         where: { id: assetId, userId },
       });

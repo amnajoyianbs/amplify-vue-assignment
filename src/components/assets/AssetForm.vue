@@ -39,6 +39,7 @@
 
     <el-form-item label="Image" prop="image">
       <el-upload
+        ref="uploadRef"
         class="upload-demo"
         :auto-upload="false"
         :on-change="handleFileChange"
@@ -81,8 +82,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue';
-import type { FormInstance, FormRules } from 'element-plus';
+import { ref, reactive, watch } from 'vue';
+import type { FormInstance, FormRules, UploadInstance } from 'element-plus';
 
 // Props
 const props = defineProps<{
@@ -100,6 +101,7 @@ const emit = defineEmits<{
 
 // Form ref
 const formRef = ref<FormInstance>();
+const uploadRef = ref<UploadInstance>();
 
 // Form data with v-model
 const formData = reactive({
@@ -125,6 +127,35 @@ const rules = reactive<FormRules>({
   category: [
     { required: true, message: 'Please select category', trigger: 'change' },
   ],
+});
+
+// Reset form
+const resetForm = () => {
+  formData.name = '';
+  formData.description = '';
+  formData.category = '';
+  formData.status = 'active';
+  formData.image = null;
+  tagsInput.value = '';
+  imagePreview.value = '';
+  formRef.value?.resetFields();
+  
+  // Clear upload component
+  if (uploadRef.value) {
+    uploadRef.value.clearFiles();
+  }
+};
+
+// Watch for initialData changes (when dialog opens/closes)
+watch(() => props.initialData, (newVal) => {
+  if (newVal) {
+    formData.name = newVal.name || '';
+    formData.description = newVal.description || '';
+    formData.category = newVal.category || '';
+    formData.status = newVal.status || 'active';
+  } else {
+    resetForm();
+  }
 });
 
 // Event handlers
@@ -163,6 +194,11 @@ const handleSubmit = async () => {
 const handleCancel = () => {
   emit('cancel');
 };
+
+// Expose reset method for parent component
+defineExpose({
+  resetForm,
+});
 </script>
 
 <style scoped>

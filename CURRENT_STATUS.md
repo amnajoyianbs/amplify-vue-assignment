@@ -34,6 +34,34 @@
 
 ## 🔄 Current Data Flow
 
+### Asset Creation Flow (Optimized)
+
+The asset creation process now follows the correct sequence:
+
+1. **Upload Image to S3 First** (if image provided)
+   - Generate temporary ID for S3 path
+   - Upload image file to S3 bucket
+   - Get the S3 URL immediately
+
+2. **Create Asset in RDS via API Gateway Lambda**
+   - Send POST request to `/assets` endpoint
+   - Include the S3 image URL in the request body
+   - Lambda stores asset data in RDS with complete information
+
+3. **Create Asset Info in DynamoDB**
+   - Store additional metadata (tags, status)
+   - Link to asset via assetId
+
+4. **Log the Action**
+   - Create audit log entry in DynamoDB
+
+**Benefits of This Approach:**
+- ✅ Data consistency: Asset created with complete information
+- ✅ No update required: Eliminates second API call
+- ✅ Better performance: Reduces API calls from 2 to 1
+- ✅ Cleaner code: Simpler flow without update logic
+- ✅ Atomic operation: Asset creation is more atomic
+
 ### Asset Management (In-Memory)
 For development and demonstration purposes, asset CRUD operations currently use an in-memory service layer:
 

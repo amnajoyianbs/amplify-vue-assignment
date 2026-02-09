@@ -30,10 +30,10 @@
 }
 
 .app-header {
-  background: #409eff;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 1rem 2rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 1.5rem 2rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
 }
 
 .header-content h1 {
@@ -43,8 +43,9 @@
 
 .app-main {
   flex: 1;
-  padding: 2rem;
-  background: #f5f7fa;
+  padding: 2.5rem;
+  background: #f8f9fa;
+  min-height: calc(100vh - 80px);
 }
 
 .app-footer {
