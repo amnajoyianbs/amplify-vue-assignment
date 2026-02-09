@@ -11,7 +11,7 @@ const getSequelize = () => {
       process.env.DB_USER || 'admin',
       process.env.DB_PASSWORD || 'test1234',
       {
-        host: process.env.DB_HOST,
+        host: 'amna-asset-management-db.c2xw4omkuu11.us-east-1.rds.amazonaws.com',
         dialect: 'mysql',
         logging: false,
         pool: {
